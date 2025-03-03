@@ -31,7 +31,7 @@ jobs:
 
           # Only commit if there are changes
           if ! git diff --exit-code; then
-            git commit -am "🔄 Auto-increment version"
+            git commit -am "chore: new version"
             git push origin main
           else
             echo "No changes to commit."
