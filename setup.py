@@ -1,8 +1,13 @@
+import re
 from setuptools import setup, find_packages
+
+def get_version():
+    with open("kehe_fl/__init__.py", "r") as f:
+        return re.search(r'__version__ = "(.*?)"', f.read()).group(1)
 
 setup(
     name="kehe-fl",
-    version="0.1.0",
+    version=get_version(),
     description="A federated learning package for IoT devices and aggregation server communication.",
     packages=find_packages(),
     install_requires=[

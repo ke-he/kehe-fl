@@ -19,7 +19,15 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: pip install --upgrade setuptools wheel twine
+        run: pip install --upgrade setuptools wheel twine bump2version
+
+      - name: Auto-increment version
+        run: |
+          git config --global user.email "actions@github.com"
+          git config --global user.name "GitHub Actions"
+          bump2version patch --allow-dirty
+          git commit -am "chore: release"
+          git push origin main
 
       - name: Build package
         run: python setup.py sdist bdist_wheel
