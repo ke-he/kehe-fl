@@ -8,10 +8,13 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
+    permissions:
+      contents: write
     steps:
-      - name: Checkout repository
+      - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -22,13 +25,9 @@ jobs:
         run: pip install --upgrade setuptools wheel twine bump2version
 
       - name: Auto-increment version
-        env:
-          GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
-          
-          git remote set-url origin https://x-access-token:${GH_TOKEN}@github.com/ke-he/kehe-fl.git
           bump2version patch
           git push
 
