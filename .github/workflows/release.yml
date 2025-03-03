@@ -26,16 +26,9 @@ jobs:
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
 
-          # Run bump2version
-          bump2version patch || echo "No version bump needed"
-
-          # Only commit if there are changes
-          if ! git diff --exit-code; then
-            git commit -am "chore: new version"
-            git push origin main
-          else
-            echo "No changes to commit."
-          fi
+          bump2version patch
+          git commit -am "chore: new version"
+          git push origin main
 
       - name: Build package
         run: python setup.py sdist bdist_wheel
