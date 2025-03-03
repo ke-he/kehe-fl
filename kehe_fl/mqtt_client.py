@@ -1,7 +1,7 @@
 import paho.mqtt.client as mqtt
 
 class MQTTClient:
-    def __init__(self, broker, port=1883, topic="kehe/fl", username=None, password=None, tls_config=None):
+    def __init__(self, broker, port=1883, topic="test", username=None, password=None, tls_config=None):
         self.broker = broker
         self.port = port
         self.topic = topic
