@@ -28,7 +28,7 @@ jobs:
 
           bump2version patch
           git commit -am "chore: new version"
-          git push origin main
+          git push
 
       - name: Build package
         run: python setup.py sdist bdist_wheel
