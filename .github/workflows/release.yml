@@ -27,7 +27,6 @@ jobs:
           git config --global user.name "GitHub Actions"
 
           bump2version patch
-          git commit -am "chore: new version"
           git push
 
       - name: Build package
