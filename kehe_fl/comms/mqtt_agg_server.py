@@ -1,53 +1,60 @@
-from mqtt_provider import MQTTProvider
+import asyncio
+
+from aiomqtt import Message
+
+from kehe_fl.comms.mqtt_provider import MQTTProvider
 from kehe_fl.comms.enum.mqtt_status_enum import MQTTStatusEnum
 
-class MQTTAggServer(MQTTProvider):
-    LISTEN_TOPIC = "sys/+/data"
-    LOGIN_TOPIC = "sys/+/login"
-    clientIds = []
 
-    def __init__(self, broker, port=1883, username=None, password=None, tls_config=None):
-        super().__init__(broker, port, username, password, tls_config)
+class MQTTAggServer(MQTTProvider):
+    LISTEN_TOPIC = r"sys/data/+"
+    LOGIN_TOPIC = r"sys/login/+"
+    clientIds = set()
+
+    def __init__(self, broker, port=1883, username=None, password=None):
+        super().__init__(broker, port, username, password)
         self.topics = [self.LISTEN_TOPIC, self.LOGIN_TOPIC]
 
-    def on_connect(self, client, userdata, flags, rc):
-        super().on_connect(client, userdata, flags, rc)
+    async def subscribe_topics(self):
         for topic in self.topics:
-            self.client.subscribe(topic)
+            await self.subscribe(topic)
             print(f"[MQTTAggServer] Subscribed to {topic}")
 
-    def on_message(self, client, userdata, msg):
-        topic = msg.topic
-        if topic == self.LISTEN_TOPIC:
-            deviceId = topic.split("/")[1]
-            self.__handle_data(deviceId, msg.payload.decode())
-        elif topic == self.LOGIN_TOPIC:
-            deviceId = topic.split("/")[1]
-            self.__handle_login(deviceId)
+    async def on_message(self, message: Message):
+        print(f"[MQTTAggServer] Received message: {message.payload.decode()} on topic {message.topic}")
+        topic = message.topic.value
+        payload = message.payload.decode()
+
+        if topic.startswith("sys/data/"):
+            deviceId = topic.split("/")[-1]
+            await self.__handle_data(deviceId, payload)
+        elif topic.startswith("sys/login/"):
+            deviceId = topic.split("/")[-1]
+            await self.__handle_login(deviceId)
         else:
-            print(f"[MQTTAggServer] Received unknown topic {msg.topic}: {msg.payload.decode()}")
+            print(f"[MQTTAggServer] Received unknown topic {topic}: {payload}")
 
-    def send_update(self, update):
-        topic = f"sys/update"
+    async def send_update(self, update):
+        topic = "sys/update"
         print(f"[MQTTAggServer] Sending update to {topic}: {update}")
-        self.publish(topic, update)
+        await self.publish(topic, update)
 
-    def send_command(self, deviceId, command):
-        topic = f"sys/{deviceId}/cmd"
+    async def send_command(self, deviceId, command):
+        topic = f"sys/cmd/{deviceId}"
         print(f"[MQTTAggServer] Sending command to {topic}: {command}")
-        self.publish(topic, command)
+        await self.publish(topic, command)
 
-    def __handle_login(self, deviceId):
+    async def __handle_login(self, deviceId):
         if deviceId not in self.clientIds:
-            self.clientIds.append(deviceId)
+            self.clientIds.add(deviceId)
             print(f"[MQTTAggServer] Device {deviceId} logged in")
         else:
-            self.send_command(deviceId, f"{MQTTStatusEnum.SUCCESS}")
+            await self.send_command(deviceId, f"{MQTTStatusEnum.DUPLICATE_CLIENT_ID}")
             print(f"[MQTTAggServer] Device {deviceId} already logged in")
 
-    def __handle_data(self, deviceId, data):
+    async def __handle_data(self, deviceId, data):
         if deviceId in self.clientIds:
             print(f"[MQTTAggServer] Data received from {deviceId}: {data}")
         else:
-            self.send_command(deviceId, f"{MQTTStatusEnum.IDENTIFIER_REJECTED}")
+            await self.send_command(deviceId, f"{MQTTStatusEnum.IDENTIFIER_REJECTED}")
             print(f"[MQTTAggServer] Unauthorized device {deviceId}")

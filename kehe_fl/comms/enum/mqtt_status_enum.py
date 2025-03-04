@@ -1,5 +1,6 @@
 from enum import Enum
 
+
 class MQTTStatusEnum(Enum):
     SUCCESS = 0  # Connection successful
     UNACCEPTABLE_PROTOCOL = 1  # Protocol version not supported

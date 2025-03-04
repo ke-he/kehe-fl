@@ -1,33 +1,48 @@
-import paho.mqtt.client as mqtt
+import asyncio
+import aiomqtt
+from typing import Optional
+
+from aiomqtt import Message
+
 
 class MQTTProvider:
-    def __init__(self, broker, port=1883, username=None, password=None, tls_config=None):
+    __is_connected = False
+    def __init__(self, broker: str, port=1883, username: Optional[str]=None, password: Optional[str]=None):
         self.broker = broker
         self.port = port
-        self.client = mqtt.Client()
+        self.username = username
+        self.password = password
 
-        if username and password:
-            self.client.username_pw_set(username, password)
+    async def connect_and_listen(self):
+        config = { "hostname": self.broker, "port": self.port }
 
-        if tls_config:
-            self.client.tls_set(tls_config.get("ca_cert"))
+        if self.username and self.password:
+            config["username"] = self.username
+            config["password"] = self.password
 
-        self.client.on_connect = self.on_connect
-        self.client.on_message = self.on_message
+        async with aiomqtt.Client(**config) as self.client:
+            print(f"[MQTT] Connected to {self.broker}:{self.port}")
+            await self.subscribe_topics()
 
-    def on_connect(self, client, userdata, flags, rc):
-        print(f"[MQTT] Connected with result code {rc}")
+            self.__is_connected = True
 
-    def on_message(self, client, userdata, msg):
-        print(f"[MQTT] Received message: {msg.payload.decode()} on topic {msg.topic}")
+            async for message in self.client.messages:
+                await self.on_message(message)
 
-    def connect(self):
-        self.client.connect(self.broker, self.port, 60)
-        self.client.loop_start()
+    async def subscribe(self, topic):
+        await self.client.subscribe(topic)
+        print(f"[MQTT] Subscribed to {topic}")
 
-    def disconnect(self):
-        self.client.loop_stop()
-        self.client.disconnect()
+    async def subscribe_topics(self):
+        pass
 
-    def publish(self, topic, payload, qos=0, retain=False):
-        self.client.publish(topic, payload, qos=qos, retain=retain)
+    async def on_message(self, message: Message):
+        pass
+
+    async def publish(self, topic, payload, qos=0, retain=False):
+        await self.client.publish(topic, payload, qos=qos, retain=retain)
+        pass
+
+    @property
+    def is_connected(self):
+        return self.__is_connected
