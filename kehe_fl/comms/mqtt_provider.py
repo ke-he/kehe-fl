@@ -1,4 +1,3 @@
-import asyncio
 import aiomqtt
 from typing import Optional
 
@@ -42,6 +41,10 @@ class MQTTProvider:
     async def publish(self, topic, payload, qos=0, retain=False):
         await self.client.publish(topic, payload, qos=qos, retain=retain)
         pass
+
+    @staticmethod
+    def _decode_message(message: Message):
+        return message.topic, message.payload.decode()
 
     @property
     def is_connected(self):

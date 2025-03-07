@@ -1,5 +1,3 @@
-import asyncio
-
 from aiomqtt import Message
 
 from kehe_fl.comms.mqtt_provider import MQTTProvider
@@ -22,14 +20,13 @@ class MQTTAggServer(MQTTProvider):
 
     async def on_message(self, message: Message):
         print(f"[MQTTAggServer] Received message: {message.payload.decode()} on topic {message.topic}")
-        topic = message.topic.value
-        payload = message.payload.decode()
+        topic, payload = MQTTProvider._decode_message(message)
 
-        if topic.startswith("sys/data/"):
-            deviceId = topic.split("/")[-1]
+        if topic.startswith("sys/data"):
+            deviceId = MQTTAggServer.__get_device_id_from_topic(topic)
             await self.__handle_data(deviceId, payload)
-        elif topic.startswith("sys/login/"):
-            deviceId = topic.split("/")[-1]
+        elif topic.startswith("sys/login"):
+            deviceId = MQTTAggServer.__get_device_id_from_topic(topic)
             await self.__handle_login(deviceId)
         else:
             print(f"[MQTTAggServer] Received unknown topic {topic}: {payload}")
@@ -58,3 +55,7 @@ class MQTTAggServer(MQTTProvider):
         else:
             await self.send_command(deviceId, f"{MQTTStatusEnum.IDENTIFIER_REJECTED}")
             print(f"[MQTTAggServer] Unauthorized device {deviceId}")
+
+    @staticmethod
+    def __get_device_id_from_topic(topic):
+        return topic.split("/")[-1]
