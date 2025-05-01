@@ -18,9 +18,8 @@ class MQTTAggServer(MQTTProvider):
             await self.subscribe(topic)
             print(f"[MQTTAggServer] Subscribed to {topic}")
 
-    async def on_message(self, message: Message):
-        print(f"[MQTTAggServer] Received message: {message.payload.decode()} on topic {message.topic}")
-        topic, payload = MQTTProvider._decode_message(message)
+    async def on_message(self, topic: str, payload: str):
+        print(f"[MQTTAggServer] Received message: {payload} on topic {topic}")
 
         if topic.startswith("sys/data"):
             deviceId = MQTTAggServer.__get_device_id_from_topic(topic)
@@ -36,8 +35,8 @@ class MQTTAggServer(MQTTProvider):
         print(f"[MQTTAggServer] Sending update to {topic}: {update}")
         await self.publish(topic, update)
 
-    async def send_command(self, deviceId, command):
-        topic = f"sys/cmd/{deviceId}"
+    async def send_command(self, command):
+        topic = f"sys/cmd/"
         print(f"[MQTTAggServer] Sending command to {topic}: {command}")
         await self.publish(topic, command)
 

@@ -1,20 +1,19 @@
 import aiomqtt
-from typing import Optional
-
+import asyncio
+from typing import Optional, Union
 from aiomqtt import Message
 
-
 class MQTTProvider:
-    __is_connected = False
-    def __init__(self, broker: str, port=1883, username: Optional[str]=None, password: Optional[str]=None):
+    def __init__(self, broker: str, port=1883, username: Optional[str] = None, password: Optional[str] = None):
         self.broker = broker
         self.port = port
         self.username = username
         self.password = password
+        self._is_connected = False
+        self._lock = asyncio.Lock()
 
     async def connect_and_listen(self):
-        config = { "hostname": self.broker, "port": self.port }
-
+        config = {"hostname": self.broker, "port": self.port}
         if self.username and self.password:
             config["username"] = self.username
             config["password"] = self.password
@@ -22,30 +21,34 @@ class MQTTProvider:
         async with aiomqtt.Client(**config) as self.client:
             print(f"[MQTT] Connected to {self.broker}:{self.port}")
             await self.subscribe_topics()
-
-            self.__is_connected = True
+            self._is_connected = True
 
             async for message in self.client.messages:
-                await self.on_message(message)
+                async with self._lock:
+                    topic, payload = self.__decode_message(message)
+                    await self.on_message(topic, payload)
 
-    async def subscribe(self, topic):
+    async def subscribe(self, topic: str) -> None:
         await self.client.subscribe(topic)
         print(f"[MQTT] Subscribed to {topic}")
 
-    async def subscribe_topics(self):
+    async def subscribe_topics(self) -> None:
         pass
 
-    async def on_message(self, message: Message):
+    async def on_message(self, topic: str, payload: Union[str, int]) -> None:
         pass
 
-    async def publish(self, topic, payload, qos=0, retain=False):
+    async def publish(self, topic: str, payload: Union[str, int], qos=0, retain=False) -> None:
         await self.client.publish(topic, payload, qos=qos, retain=retain)
-        pass
 
     @staticmethod
-    def _decode_message(message: Message):
-        return message.topic, message.payload.decode()
+    def __decode_message(message: Message) -> tuple[str, Union[str, int]]:
+        return message.topic.value, MQTTProvider.__parse_payload(message.payload.decode())
+
+    @staticmethod
+    def __parse_payload(payload: str) -> Union[str, int]:
+        return int(payload) if payload.isnumeric() else payload
 
     @property
-    def is_connected(self):
-        return self.__is_connected
+    def is_connected(self) -> bool:
+        return self._is_connected
