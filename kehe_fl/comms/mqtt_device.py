@@ -7,14 +7,12 @@ from kehe_fl.utils.service.data_collection_service import DataCollectionService
 
 
 class MQTTDevice(MQTTProvider):
-    CMD_TOPIC = "sys/cmd/"
-
     def __init__(self, broker, deviceId, port=1883, username=None, password=None):
         super().__init__(broker, port, username, password)
         self.deviceId = deviceId
-        self.clientTopic = f"sys/data/{deviceId}"
+        self.clientTopic = f"{ProjectConstants.FEEDBACK_TOPIC}{deviceId}"
         self.loginTopic = f"sys/login/{deviceId}"
-        self.serverTopics = [self.CMD_TOPIC]
+        self.serverTopics = [ProjectConstants.CMD_TOPIC]
         self._dataCollectionTask = None
         self._dataCollectionService = None
 
@@ -27,7 +25,7 @@ class MQTTDevice(MQTTProvider):
 
         print(payload)
 
-        if topic != self.CMD_TOPIC:
+        if topic != ProjectConstants.CMD_TOPIC:
             print(f"[MQTTDevice - {self.deviceId}] Unknown topic {topic}: {payload}")
             return
 
@@ -38,9 +36,9 @@ class MQTTDevice(MQTTProvider):
 
     async def handle_cmd(self, payload):
         if payload == MQTTCmdEnum.START_DATA_COLLECTION.value:
-            self.start_data_collection()
+            await self.start_data_collection()
         elif payload == MQTTCmdEnum.CHECK_DATA_COUNT.value:
-            self.check_data_count()
+            await self.check_data_count()
         elif payload == MQTTCmdEnum.START_TRAINING.value:
             await self.start_training()
         elif payload == MQTTCmdEnum.CHECK_TRAINING_STATUS.value:
@@ -52,23 +50,26 @@ class MQTTDevice(MQTTProvider):
         else:
             print("Command not found")
 
-    def start_data_collection(self):
+    async def start_data_collection(self):
         if not self._dataCollectionTask or self._dataCollectionTask.done():
             self._dataCollectionService = DataCollectionService(fields=ProjectConstants.CSV_FIELDS,
                                                                 path=ProjectConstants.DATA_DIRECTORY,
                                                                 interval=ProjectConstants.COLLECTION_INTERVAL)
             self._dataCollectionTask = asyncio.create_task(asyncio.to_thread(self._dataCollectionService.start))
             print(f"[MQTTDevice - {self.deviceId}] Data collection started")
+            await self.send_data("Data collection started")
         else:
             print(f"[MQTTDevice - {self.deviceId}] Data collection already running")
+            await self.send_data("Data collection already running")
         return
 
-    def check_data_count(self):
+    async def check_data_count(self):
         if self._dataCollectionService and self._dataCollectionTask and not self._dataCollectionTask.done():
             count = self._dataCollectionService.check_data_count()
-            print(f"[MQTTDevice - {self.deviceId}] Data count: {count}")
+            await self.send_data(count)
         else:
             print("[MQTTDevice - {self.deviceId}] Data collection not running")
+            await self.send_data("Data collection not running")
         return
 
     async def start_training(self):

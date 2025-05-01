@@ -2,12 +2,15 @@ from aiomqtt import Message
 
 from kehe_fl.comms.mqtt_provider import MQTTProvider
 from kehe_fl.comms.enum.mqtt_status_enum import MQTTStatusEnum
+from kehe_fl.utils.common.project_constants import ProjectConstants
 
 
 class MQTTAggServer(MQTTProvider):
-    LISTEN_TOPIC = r"sys/data/+"
+    LISTEN_TOPIC = f"{ProjectConstants.FEEDBACK_TOPIC}+"
     LOGIN_TOPIC = r"sys/login/+"
     clientIds = set()
+    lastCommand = None
+    working = False
 
     def __init__(self, broker, port=1883, username=None, password=None):
         super().__init__(broker, port, username, password)
@@ -19,9 +22,7 @@ class MQTTAggServer(MQTTProvider):
             print(f"[MQTTAggServer] Subscribed to {topic}")
 
     async def on_message(self, topic: str, payload: str):
-        print(f"[MQTTAggServer] Received message: {payload} on topic {topic}")
-
-        if topic.startswith("sys/data"):
+        if topic.startswith(ProjectConstants.FEEDBACK_TOPIC[:-1]):
             deviceId = MQTTAggServer.__get_device_id_from_topic(topic)
             await self.__handle_data(deviceId, payload)
         elif topic.startswith("sys/login"):
@@ -38,6 +39,8 @@ class MQTTAggServer(MQTTProvider):
     async def send_command(self, command):
         topic = f"sys/cmd/"
         print(f"[MQTTAggServer] Sending command to {topic}: {command}")
+        self.lastCommand = command
+        self.working = True
         await self.publish(topic, command)
 
     async def __handle_login(self, deviceId):
@@ -49,11 +52,8 @@ class MQTTAggServer(MQTTProvider):
             print(f"[MQTTAggServer] Device {deviceId} already logged in")
 
     async def __handle_data(self, deviceId, data):
-        if deviceId in self.clientIds:
-            print(f"[MQTTAggServer] Data received from {deviceId}: {data}")
-        else:
-            await self.send_command(deviceId, f"{MQTTStatusEnum.IDENTIFIER_REJECTED}")
-            print(f"[MQTTAggServer] Unauthorized device {deviceId}")
+        print(f"[MQTTAggServer] Data received from {deviceId}: {data} | action: {self.lastCommand}")
+        self.working = False
 
     @staticmethod
     def __get_device_id_from_topic(topic):
