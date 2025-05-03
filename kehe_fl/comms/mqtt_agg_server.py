@@ -1,5 +1,3 @@
-from aiomqtt import Message
-
 from kehe_fl.comms.enum.mqtt_cmd_enum import MQTTCmdEnum
 from kehe_fl.comms.mqtt_provider import MQTTProvider
 from kehe_fl.comms.enum.mqtt_status_enum import MQTTStatusEnum
