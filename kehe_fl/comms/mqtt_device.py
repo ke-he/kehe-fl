@@ -4,6 +4,7 @@ from kehe_fl.comms.enum.mqtt_cmd_enum import MQTTCmdEnum
 from kehe_fl.comms.mqtt_provider import MQTTProvider
 from kehe_fl.utils.common.project_constants import ProjectConstants
 from kehe_fl.utils.service.data_collection_service import DataCollectionService
+from kehe_fl.utils.service.model_service import ModelService
 
 
 class MQTTDevice(MQTTProvider):
@@ -11,10 +12,12 @@ class MQTTDevice(MQTTProvider):
         super().__init__(broker, port, username, password)
         self.deviceId = deviceId
         self.clientTopic = f"{ProjectConstants.FEEDBACK_TOPIC}{deviceId}"
-        self.loginTopic = f"sys/login/{deviceId}"
+        self.loginTopic = f"{ProjectConstants.LOGIN_TOPIC}{deviceId}"
         self.serverTopics = [ProjectConstants.CMD_TOPIC]
         self._dataCollectionTask = None
         self._dataCollectionService = None
+        self._modelTask = None
+        self._modelService = None
 
     async def subscribe_topics(self):
         for topic in self.serverTopics:
@@ -68,29 +71,40 @@ class MQTTDevice(MQTTProvider):
             count = self._dataCollectionService.check_data_count()
             await self.send_data(count)
         else:
-            print("[MQTTDevice - {self.deviceId}] Data collection not running")
+            print(f"[MQTTDevice - {self.deviceId}] Data collection not running")
             await self.send_data("Data collection not running")
         return
 
     async def start_training(self):
-        await self._stop_data_collection()
-        print("started training")
+        if self._dataCollectionService and self._dataCollectionTask and not self._dataCollectionTask.done():
+            print(f"[MQTTDevice - {self.deviceId}] Data collection running, stopping it first")
+            await self._stop_data_collection()
+
+        if not self._modelTask or self._modelTask.done():
+            self._modelService = ModelService()
+            self._modelTask = asyncio.create_task(asyncio.to_thread(self._modelService.start_training,
+                                                                    data_path=ProjectConstants.DATA_DIRECTORY))
+            print(f"[MQTTDevice - {self.deviceId}] Training started")
+            await self.send_data("Training started")
         return
 
     async def check_training_status(self):
-        print("check training status")
+        if self._modelTask and not self._modelTask.done():
+            iterationCount, weights = self._modelService.check_training_status()
+            await self.send_data(f"Iteration count: {iterationCount}, Weights: {weights}")
+        else:
+            print(f"[MQTTDevice - {self.deviceId}] Training not running")
+            await self.send_data("Training not running")
         return
 
     async def send_update(self):
-        print("send update")
+        data = self._modelService.get_weights()
+        await self.send_data(data)
         return
 
     async def check_for_update(self):
         print("check for update")
         return
-
-    def __get_cmd(self, payload):
-        return payload[2:]
 
     async def _stop_data_collection(self):
         if self._dataCollectionService and self._dataCollectionTask:
