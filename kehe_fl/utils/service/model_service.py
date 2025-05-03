@@ -35,7 +35,8 @@ class ModelService:
 
     def predict(self, x):
         if self.__weights is None:
-            raise ValueError("Model is not trained yet.")
+            print("[MQTTAggServer] No weights")
+            return None
         return self.__weights[0] + self.__weights[1] * x
 
     def start_training(self, data_path: str):
