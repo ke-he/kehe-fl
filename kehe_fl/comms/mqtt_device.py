@@ -1,6 +1,7 @@
 import asyncio
 
 from kehe_fl.comms.enum.mqtt_cmd_enum import MQTTCmdEnum
+from kehe_fl.comms.enum.mqtt_status_enum import MQTTStatusEnum
 from kehe_fl.comms.mqtt_provider import MQTTProvider
 from kehe_fl.utils.common.project_constants import ProjectConstants
 from kehe_fl.utils.service.data_collection_service import DataCollectionService
@@ -50,6 +51,8 @@ class MQTTDevice(MQTTProvider):
             await self.send_update()
         elif payload == MQTTCmdEnum.CHECK_FOR_UPDATES.value:
             await self.check_for_update()
+        elif payload == MQTTCmdEnum.REGISTER_DEVICE.value:
+            await self.send_data(MQTTStatusEnum.SUCCESS.value)
         else:
             print("Command not found")
 
