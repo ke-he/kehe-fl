@@ -41,7 +41,7 @@ class ModelService:
 
     def start_training(self, data_path: str):
         if not self.__isTraining:
-            print("[FederatedLearningService] Starting training...")
+            print("[ModelService] Starting training...")
             self.__isTraining = True
 
             data_files = glob(f"{data_path}/*.csv")
@@ -55,18 +55,18 @@ class ModelService:
             self.__weights = self.__gradient_descent(self.__weights)
             end_time = time.time()
 
-            print(f"[FederatedLearningService] Training completed in {end_time - start_time:.2f} seconds.")
-            print(f"[FederatedLearningService] Final weights: {self.__weights}")
+            print(f"[ModelService] Training completed in {end_time - start_time:.2f} seconds.")
+            print(f"[ModelService] Final weights: {self.__weights}")
 
             self.__isTraining = False
         else:
-            print("[FederatedLearningService] Training already in progress.")
+            print("[ModelService] Training already in progress.")
 
     def check_training_status(self):
         if self.__isTraining:
             return self.__iterationCount, self.__weights
         else:
-            print("[FederatedLearningService] No training in progress.")
+            print("[ModelService] No training in progress.")
             return None
 
     def get_weights(self):
