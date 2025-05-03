@@ -4,3 +4,5 @@ class ProjectConstants:
     CMD_TOPIC = "sys/cmd/"
     FEEDBACK_TOPIC = "sys/feedback/"
     COLLECTION_INTERVAL = 2  # seconds
+    FL_ALPHA = 1e-4
+    FL_ITERATIONS = 1000
