@@ -32,11 +32,10 @@ class MQTTAggServer(MQTTProvider):
         await self.publish(topic, update)
 
     async def send_command(self, command):
-        topic = f"sys/cmd/"
-        print(f"[MQTTAggServer] Sending command to {topic}: {command}")
+        print(f"[MQTTAggServer] Sending command to {ProjectConstants.CMD_TOPIC}: {command}")
         self.lastCommand = command
         self.working = True
-        await self.publish(topic, command)
+        await self.publish(ProjectConstants.CMD_TOPIC, command)
 
     async def __handle_data(self, deviceId, data):
         if self.lastCommand == MQTTCmdEnum.REGISTER_DEVICE:
