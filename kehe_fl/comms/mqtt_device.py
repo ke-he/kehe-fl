@@ -13,8 +13,7 @@ class MQTTDevice(MQTTProvider):
         super().__init__(broker, port, username, password)
         self.deviceId = deviceId
         self.clientTopic = f"{ProjectConstants.FEEDBACK_TOPIC}{deviceId}"
-        self.loginTopic = f"{ProjectConstants.LOGIN_TOPIC}{deviceId}"
-        self.serverTopics = [ProjectConstants.CMD_TOPIC]
+        self.serverTopics = [ProjectConstants.CMD_TOPIC, ProjectConstants.DATA_TOPIC]
         self._dataCollectionTask = None
         self._dataCollectionService = None
         self._modelTask = None
@@ -27,10 +26,12 @@ class MQTTDevice(MQTTProvider):
     async def on_message(self, topic: str, payload: int):
         print(f"[MQTTDevice - {self.deviceId}] Received message: {payload} on topic {topic}")
 
-        print(payload)
-
-        if topic != ProjectConstants.CMD_TOPIC:
+        if topic not in (ProjectConstants.CMD_TOPIC, ProjectConstants.DATA_TOPIC):
             print(f"[MQTTDevice - {self.deviceId}] Unknown topic {topic}: {payload}")
+            return
+
+        if topic == ProjectConstants.DATA_TOPIC:
+            await self.check_for_update(payload)
             return
 
         await self.handle_cmd(payload)
@@ -49,10 +50,8 @@ class MQTTDevice(MQTTProvider):
             await self.check_training_status()
         elif payload == MQTTCmdEnum.SEND_UPDATE.value:
             await self.send_update()
-        elif payload == MQTTCmdEnum.CHECK_FOR_UPDATES.value:
-            await self.check_for_update()
         elif payload == MQTTCmdEnum.REGISTER_DEVICE.value:
-            await self.send_data(MQTTStatusEnum.SUCCESS.value)
+            await self.send_data(MQTTStatusEnum.REGISTRATION_SUCCESSFUL.value)
         else:
             print("Command not found")
 
@@ -62,11 +61,9 @@ class MQTTDevice(MQTTProvider):
                                                                 path=ProjectConstants.DATA_DIRECTORY,
                                                                 interval=ProjectConstants.COLLECTION_INTERVAL)
             self._dataCollectionTask = asyncio.create_task(asyncio.to_thread(self._dataCollectionService.start))
-            print(f"[MQTTDevice - {self.deviceId}] Data collection started")
-            await self.send_data("Data collection started")
+            await self.send_data(MQTTStatusEnum.DATA_COLLECTION_STARTED.value)
         else:
-            print(f"[MQTTDevice - {self.deviceId}] Data collection already running")
-            await self.send_data("Data collection already running")
+            await self.send_data(MQTTStatusEnum.DATA_COLLECTION_ALREADY_RUNNING.value)
         return
 
     async def check_data_count(self):
@@ -105,8 +102,12 @@ class MQTTDevice(MQTTProvider):
         await self.send_data(data)
         return
 
-    async def check_for_update(self):
-        print("check for update")
+    async def check_for_update(self, update):
+        if update:
+            self._modelService.set_weights(update)
+        else:
+            print(f"[MQTTDevice - {self.deviceId}] No updates available")
+            await self.send_data("No updates available")
         return
 
     async def _stop_data_collection(self):

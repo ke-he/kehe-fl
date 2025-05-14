@@ -7,8 +7,7 @@ class MQTTCmdEnum(Enum):
     START_TRAINING = 2
     CHECK_TRAINING_STATUS = 3
     SEND_UPDATE = 4
-    CHECK_FOR_UPDATES = 5
-    REGISTER_DEVICE = 6
+    REGISTER_DEVICE = 5
 
     @staticmethod
     def get_command_message(code):
@@ -18,6 +17,6 @@ class MQTTCmdEnum(Enum):
             MQTTCmdEnum.START_TRAINING: "Advised edge devices to start training.",
             MQTTCmdEnum.CHECK_TRAINING_STATUS: "Requested edge devices to share training status.",
             MQTTCmdEnum.SEND_UPDATE: "Requested edge devices to send update.",
-            MQTTCmdEnum.CHECK_FOR_UPDATES: "Requested edge devices to check for updates.",
+            MQTTCmdEnum.REGISTER_DEVICE: "Advised edge devices to register.",
         }
         return command_messages.get(code, "Unknown command code.")

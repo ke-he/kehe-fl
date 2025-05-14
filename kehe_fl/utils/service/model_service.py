@@ -71,3 +71,7 @@ class ModelService:
 
     def get_weights(self):
         return self.__weights
+
+    def set_weights(self, weights):
+        self.__weights = weights
+        return
