@@ -4,6 +4,7 @@ from kehe_fl.comms.enum.mqtt_cmd_enum import MQTTCmdEnum
 from kehe_fl.comms.mqtt_provider import MQTTProvider
 from kehe_fl.comms.enum.mqtt_status_enum import MQTTStatusEnum
 from kehe_fl.utils.common.project_constants import ProjectConstants
+from kehe_fl.utils.service.model_service import ModelService
 
 
 class MQTTAggServer(MQTTProvider):
@@ -14,10 +15,12 @@ class MQTTAggServer(MQTTProvider):
     working = False
     messageQueue = []
     deviceErrorOccurred = False
+    weightsArray = []
 
     def __init__(self, broker, port=1883, username=None, password=None):
         super().__init__(broker, port, username, password)
         self.topics = [self.LISTEN_TOPIC]
+        self.modelService = ModelService(agg=True)
         self._in_queue = asyncio.Queue()
         asyncio.create_task(self._worker())
 
@@ -35,25 +38,7 @@ class MQTTAggServer(MQTTProvider):
                 self._in_queue.task_done()
                 self.commandClientIds.add(deviceId)
 
-            if self.deviceErrorOccurred:
-                self.deviceErrorOccurred = False
-                self.commandClientIds.clear()
-                self.lastCommand = None
-                self.working = False
-
-            if self.lastCommand == MQTTCmdEnum.REGISTER_DEVICE.value and ProjectConstants.CLIENT_DEVICES == len(
-                    self.clientIds):
-                print(f"[MQTTAggServer] All devices registered: {self.clientIds}")
-                self.commandClientIds.clear()
-                self.lastCommand = None
-                self.working = False
-
-            if self.lastCommand != MQTTCmdEnum.REGISTER_DEVICE.value and len(self.commandClientIds) == len(
-                    self.clientIds):
-                self.commandClientIds.clear()
-                print(f"[MQTTAggServer] All devices have responded to command {self.lastCommand}")
-                self.lastCommand = None
-                self.working = False
+            self.__after_queue_job_done()
 
     async def on_message(self, topic: str, payload: str):
         if topic.startswith(ProjectConstants.FEEDBACK_TOPIC[:-1]):
@@ -96,13 +81,27 @@ class MQTTAggServer(MQTTProvider):
             else:
                 MQTTAggServer.__printStatus(deviceId, data)
         elif self.lastCommand == MQTTCmdEnum.START_DATA_COLLECTION.value:
-            if data == MQTTStatusEnum.DATA_COLLECTION_STARTED.value:
-                MQTTAggServer.__printStatus(deviceId, data)
-            else:
-                MQTTAggServer.__printStatus(deviceId, data)
+            MQTTAggServer.__printStatus(deviceId, data)
         elif self.lastCommand == MQTTCmdEnum.CHECK_DATA_COUNT.value:
             if data.isnumeric():
                 print(f"[MQTTAggServer] Device {deviceId}: Data count {data}")
+            else:
+                MQTTAggServer.__printStatus(deviceId, data)
+        elif self.lastCommand == MQTTCmdEnum.STOP_DATA_COLLECTION.value:
+            MQTTAggServer.__printStatus(deviceId, data)
+        elif self.lastCommand == MQTTCmdEnum.START_TRAINING.value:
+            MQTTAggServer.__printStatus(deviceId, data)
+        elif self.lastCommand == MQTTCmdEnum.CHECK_TRAINING_STATUS.value:
+            iterationCount, weights = ModelService.unpack_training_status(data)
+            if iterationCount is not None and weights is not None:
+                print(
+                    f"[MQTTAggServer] Device {deviceId}: Training status - Iteration count: {iterationCount}, Weights: {weights}")
+            else:
+                MQTTAggServer.__printStatus(deviceId, data)
+        elif self.lastCommand == MQTTCmdEnum.SEND_UPDATE.value:
+            if data.isnumeric():
+                print(f"[MQTTAggServer] Device {deviceId}: Update count {data}")
+                self.weightsArray.append(data)
             else:
                 MQTTAggServer.__printStatus(deviceId, data)
 
@@ -110,6 +109,33 @@ class MQTTAggServer(MQTTProvider):
         if deviceId not in self.clientIds:
             self.clientIds.add(deviceId)
         return
+
+    def __after_queue_job_done(self):
+        if self.deviceErrorOccurred:
+            self.__handle_clear_worker()
+        elif self.lastCommand == MQTTCmdEnum.REGISTER_DEVICE.value and ProjectConstants.CLIENT_DEVICES == len(
+                self.clientIds):
+            print(f"[MQTTAggServer] All devices registered: {self.clientIds}")
+            self.__handle_clear_worker()
+        elif self.lastCommand == MQTTCmdEnum.SEND_UPDATE.value and len(
+                self.weightsArray) == ProjectConstants.CLIENT_DEVICES:
+            print(f"[MQTTAggServer] All devices have sent updates: {self.weightsArray}")
+            self.__handle_model_aggregation()
+            self.__handle_clear_worker()
+        elif self.lastCommand != MQTTCmdEnum.REGISTER_DEVICE.value and len(self.commandClientIds) == len(
+                self.clientIds):
+            print(f"[MQTTAggServer] All devices have responded to command {self.lastCommand}")
+            self.__handle_clear_worker()
+
+    def __handle_clear_worker(self):
+        self.deviceErrorOccurred = False
+        self.commandClientIds.clear()
+        self.lastCommand = None
+        self.working = False
+
+    def __handle_model_aggregation(self):
+        self.modelService.aggregate_weights(weights=self.weightsArray)
+        self.weightsArray.clear()
 
     @staticmethod
     def __get_device_id_from_topic(topic):

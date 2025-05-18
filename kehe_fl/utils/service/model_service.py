@@ -8,7 +8,7 @@ from kehe_fl.utils.common.project_constants import ProjectConstants
 
 
 class ModelService:
-    def __init__(self, main = False):
+    def __init__(self, agg = False):
         self.__isTraining = False
         self.__weights = None
         self.__x = None
@@ -75,3 +75,21 @@ class ModelService:
     def set_weights(self, weights):
         self.__weights = weights
         return
+
+    def aggregate_weights(self, weights):
+        # aggregate weights from all devices
+        return
+
+    @staticmethod
+    def unpack_training_status(data):
+        # check data is array also convert to array because data is string then index 0 is iteration count and index 2 are weights (which can be also an array i think) - just check the model service
+        test = data.split(",")
+        if len(test) == 2:
+            try:
+                iterationCount = int(test[0])
+                weights = np.array([float(i) for i in test[1].split()])
+                return iterationCount, weights
+            except ValueError:
+                print("[ModelService] Error unpacking training status data")
+        else:
+            print("[ModelService] Invalid training status data format")

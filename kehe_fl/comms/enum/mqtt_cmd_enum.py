@@ -8,6 +8,7 @@ class MQTTCmdEnum(Enum):
     CHECK_TRAINING_STATUS = 3
     SEND_UPDATE = 4
     REGISTER_DEVICE = 5
+    STOP_DATA_COLLECTION = 6
 
     @staticmethod
     def get_command_message(code):

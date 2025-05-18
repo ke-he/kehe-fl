@@ -44,6 +44,8 @@ class MQTTDevice(MQTTProvider):
             await self.start_data_collection()
         elif payload == MQTTCmdEnum.CHECK_DATA_COUNT.value:
             await self.check_data_count()
+        elif payload == MQTTCmdEnum.STOP_DATA_COLLECTION.value:
+            await self._stop_data_collection(withFeedback=True)
         elif payload == MQTTCmdEnum.START_TRAINING.value:
             await self.start_training()
         elif payload == MQTTCmdEnum.CHECK_TRAINING_STATUS.value:
@@ -56,7 +58,12 @@ class MQTTDevice(MQTTProvider):
             print("Command not found")
 
     async def start_data_collection(self):
-        if not self._dataCollectionTask or self._dataCollectionTask.done():
+        if self.__isTraining():
+            print(f"[MQTTDevice - {self.deviceId}] Training in process, cannot start data collection")
+            await self.send_data(MQTTStatusEnum.TRAINING_IN_PROCESS.value)
+            return
+
+        if not self.__isDataCollecting():
             self._dataCollectionService = DataCollectionService(fields=ProjectConstants.CSV_FIELDS,
                                                                 path=ProjectConstants.DATA_DIRECTORY,
                                                                 interval=ProjectConstants.COLLECTION_INTERVAL)
@@ -67,42 +74,72 @@ class MQTTDevice(MQTTProvider):
         return
 
     async def check_data_count(self):
-        if self._dataCollectionService and self._dataCollectionTask and not self._dataCollectionTask.done():
+        if self.__isTraining():
+            print(f"[MQTTDevice - {self.deviceId}] Training in process, cannot check data count")
+            await self.send_data(MQTTStatusEnum.TRAINING_IN_PROCESS.value)
+            return
+
+        if self.__isDataCollecting():
             count = self._dataCollectionService.check_data_count()
             await self.send_data(count)
         else:
             print(f"[MQTTDevice - {self.deviceId}] Data collection not running")
-            await self.send_data("Data collection not running")
+            await self.send_data(MQTTStatusEnum.DATA_COLLECTION_NOT_RUNNING.value)
         return
 
     async def start_training(self):
-        if self._dataCollectionService and self._dataCollectionTask and not self._dataCollectionTask.done():
+        if self.__isDataCollecting():
             print(f"[MQTTDevice - {self.deviceId}] Data collection running, stopping it first")
             await self._stop_data_collection()
 
-        if not self._modelTask or self._modelTask.done():
+        if not self.__isTraining():
             self._modelService = ModelService()
             self._modelTask = asyncio.create_task(asyncio.to_thread(self._modelService.start_training,
                                                                     data_path=ProjectConstants.DATA_DIRECTORY))
             print(f"[MQTTDevice - {self.deviceId}] Training started")
-            await self.send_data("Training started")
-        return
+            await self.send_data(MQTTStatusEnum.STARTED_TRAINING.value)
+        else:
+            print(f"[MQTTDevice - {self.deviceId}] Training already running")
+            await self.send_data(MQTTStatusEnum.STARTED_TRAINING.value)
 
     async def check_training_status(self):
-        if self._modelTask and not self._modelTask.done():
-            iterationCount, weights = self._modelService.check_training_status()
-            await self.send_data(f"Iteration count: {iterationCount}, Weights: {weights}")
+        if self.__isDataCollecting():
+            print(f"[MQTTDevice - {self.deviceId}] Data collection running, cannot check training status")
+            await self.send_data(MQTTStatusEnum.DATA_COLLECTION_IN_PROCESS.value)
+            return
+
+        if self.__isTraining():
+            await self.send_data(self._modelService.check_training_status())
         else:
             print(f"[MQTTDevice - {self.deviceId}] Training not running")
-            await self.send_data("Training not running")
+            await self.send_data(MQTTStatusEnum.TRAINING_NOT_RUNNING.value)
         return
 
     async def send_update(self):
+        if self.__isTraining():
+            print(f"[MQTTDevice - {self.deviceId}] Training in process, cannot send update")
+            await self.send_data(MQTTStatusEnum.TRAINING_IN_PROCESS.value)
+            return
+
+        if self.__isDataCollecting():
+            print(f"[MQTTDevice - {self.deviceId}] Data collection in process, cannot send update")
+            await self.send_data(MQTTStatusEnum.DATA_COLLECTION_IN_PROCESS.value)
+            return
+
         data = self._modelService.get_weights()
         await self.send_data(data)
         return
 
     async def check_for_update(self, update):
+        if self.__isTraining():
+            print(f"[MQTTDevice - {self.deviceId}] Training in process, cannot check for update")
+            await self.send_data(MQTTStatusEnum.TRAINING_IN_PROCESS.value)
+            return
+
+        if self.__isDataCollecting():
+            print(f"[MQTTDevice - {self.deviceId}] Data collection running, cannot check for update")
+            await self.send_data(MQTTStatusEnum.DATA_COLLECTION_IN_PROCESS.value)
+
         if update:
             self._modelService.set_weights(update)
         else:
@@ -110,12 +147,26 @@ class MQTTDevice(MQTTProvider):
             await self.send_data("No updates available")
         return
 
-    async def _stop_data_collection(self):
-        if self._dataCollectionService and self._dataCollectionTask:
+    def __isTraining(self):
+        if self._modelTask and not self._modelTask.done():
+            return True
+        return False
+
+    def __isDataCollecting(self):
+        if self._dataCollectionTask and not self._dataCollectionTask.done():
+            return True
+        return False
+
+    async def _stop_data_collection(self, withFeedback=False):
+        if self.__isDataCollecting():
             self._dataCollectionService.stop()
             await self._dataCollectionTask
             self._dataCollectionService = None
-            print("[MQTTDevice - {self.deviceId}] Data collection stopped")
+            print(f"[MQTTDevice - {self.deviceId}] Data collection stopped")
+            if withFeedback:
+                await self.send_data(MQTTStatusEnum.DATA_COLLECTION_STOPPED.value)
         else:
-            print("[MQTTDevice - {self.deviceId}] Data collection not running")
+            print(f"[MQTTDevice - {self.deviceId}] Data collection not running")
+            if withFeedback:
+                await self.send_data(MQTTStatusEnum.DATA_COLLECTION_NOT_RUNNING.value)
         return
