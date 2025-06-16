@@ -5,10 +5,12 @@ from kehe_fl.comms.mqtt_provider import MQTTProvider
 from kehe_fl.comms.enum.mqtt_status_enum import MQTTStatusEnum
 from kehe_fl.utils.common.project_constants import ProjectConstants
 from kehe_fl.utils.service.model_service import ModelService
+from kehe_fl.utils.service.monitoring_service import MonitoringService
 
 
 class MQTTAggServer(MQTTProvider):
     LISTEN_TOPIC = f"{ProjectConstants.FEEDBACK_TOPIC}+"
+    FL_ROUND_FEEDBACK_TOPIC = f"{ProjectConstants.FL_ROUND_TOPIC}+"
     clientIds = set()
     commandClientIds = set()
     lastCommand = None
@@ -16,11 +18,14 @@ class MQTTAggServer(MQTTProvider):
     messageQueue = []
     deviceErrorOccurred = False
     weightsArray = []
+    newWeights = None
 
     def __init__(self, broker, port=1883, username=None, password=None):
         super().__init__(broker, port, username, password)
-        self.topics = [self.LISTEN_TOPIC]
+        self.topics = [self.LISTEN_TOPIC, self.FL_ROUND_FEEDBACK_TOPIC]
         self.modelService = ModelService(agg=True)
+        self._monitoringService = None
+        self._monitoringTask = None
         self._in_queue = asyncio.Queue()
         asyncio.create_task(self._worker())
 
@@ -41,7 +46,17 @@ class MQTTAggServer(MQTTProvider):
             self.__after_queue_job_done()
 
     async def on_message(self, topic: str, payload: str):
-        if topic.startswith(ProjectConstants.FEEDBACK_TOPIC[:-1]):
+        if topic.startswith(ProjectConstants.FL_ROUND_TOPIC[:-1]):
+            deviceId = self.__get_device_id_from_topic(topic)
+            if deviceId not in self.clientIds:
+                return
+            if not (payload == "" or payload is None):
+                self.weightsArray.append(MQTTProvider._unpack_weights(payload))
+                print(f"[MQTTAggServer] Received FL round update from {deviceId}")
+            else:
+                self.deviceErrorOccurred = True
+                print(f"[MQTTAggServer] Received empty FL round update from {deviceId}")
+        elif topic.startswith(ProjectConstants.FEEDBACK_TOPIC[:-1]):
             deviceId = MQTTAggServer.__get_device_id_from_topic(topic)
             await self._in_queue.put((deviceId, payload))
         else:
@@ -62,9 +77,20 @@ class MQTTAggServer(MQTTProvider):
             print(f"[MQTTAggServer] No devices registered. Cannot send command: {command}")
             return
 
-        print(f"[MQTTAggServer] Sending command to {ProjectConstants.CMD_TOPIC}: {command}")
         self.lastCommand = numCommand
         self.working = True
+        if self.lastCommand == MQTTCmdEnum.FL_ROUND.value:
+            self._monitoringService = MonitoringService()
+            self._monitoringTask = asyncio.create_task(asyncio.to_thread(self._monitoringService.start))
+            await self.start_federated_training()
+            self._monitoringService.stop()
+            await self._monitoringTask
+            self._monitoringService = None
+            self._monitoringTask = None
+            self.working = False
+            return
+
+        print(f"[MQTTAggServer] Sending command to {ProjectConstants.CMD_TOPIC}: {command}")
         await self.publish(ProjectConstants.CMD_TOPIC, command)
 
     async def __handle_data(self, deviceId, data):
@@ -134,8 +160,40 @@ class MQTTAggServer(MQTTProvider):
         self.working = False
 
     def __handle_model_aggregation(self):
-        self.modelService.aggregate_weights(weights=self.weightsArray)
+        self.newWeights = self.modelService.aggregate_weights(weights=self.weightsArray)
         self.weightsArray.clear()
+        self.modelService.set_weights(self.newWeights)
+
+    async def start_federated_training(self):
+        for round_num in range(ProjectConstants.FL_GLOBAL_EPOCHS):
+            print(f"[MQTTAggServer] Starting round {round_num + 1}/{ProjectConstants.FL_GLOBAL_EPOCHS}")
+
+            await self.send_fl_round(self.newWeights)
+
+            self.weightsArray.clear()
+            self.commandClientIds.clear()
+
+            while len(self.weightsArray) < ProjectConstants.CLIENT_DEVICES:
+                if self.deviceErrorOccurred:
+                    self.deviceErrorOccurred = False
+                    return
+                await asyncio.sleep(0.5)  # polling, not elegant but simple
+
+            print(f"[MQTTAggServer] Aggregating weights for round {round_num + 1}")
+
+            if round_num == ProjectConstants.FL_GLOBAL_EPOCHS - 1:
+                print("[MQTTAggServer] Finalizing FL round, sending aggregated weights to clients.")
+                await self.send_fl_round(self.modelService.get_weights())
+            else:
+                print(f"[MQTTAggServer] Round {round_num + 1} complete, waiting for next round.")
+                self.modelService.set_weights(None)
+
+        print("[MQTTAggServer] Federated training complete.")
+
+    async def send_fl_round(self, weights=None):
+        topic = ProjectConstants.FL_ROUND_HANDLE
+        print(f"[MQTTAggServer] Starting FL round, sending weights: {weights}")
+        await self._send_weights(topic, weights)
 
     @staticmethod
     def __get_device_id_from_topic(topic):

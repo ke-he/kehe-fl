@@ -1,6 +1,10 @@
+import json
+
 import aiomqtt
 import asyncio
 from typing import Optional, Union
+
+import numpy as np
 from aiomqtt import Message
 
 class MQTTProvider:
@@ -38,7 +42,7 @@ class MQTTProvider:
     async def on_message(self, topic: str, payload: Union[str, int]) -> None:
         pass
 
-    async def publish(self, topic: str, payload: Union[str, int], qos=0, retain=False) -> None:
+    async def publish(self, topic: str, payload: Union[str, int, list, None]=None, qos=0, retain=False) -> None:
         await self.client.publish(topic, payload, qos=qos, retain=retain)
 
     @staticmethod
@@ -52,3 +56,14 @@ class MQTTProvider:
     @property
     def is_connected(self) -> bool:
         return self._is_connected
+
+    async def _send_weights(self, topic, weights):
+        if weights is not None and len(weights) > 0:
+            await self.publish(topic, json.dumps(weights.tolist()))
+        else:
+            await self.publish(topic, None)
+
+    @staticmethod
+    def _unpack_weights(weights):
+        weights_list = json.loads(weights)
+        return np.array(weights_list)

@@ -6,6 +6,7 @@ from kehe_fl.comms.mqtt_provider import MQTTProvider
 from kehe_fl.utils.common.project_constants import ProjectConstants
 from kehe_fl.utils.service.data_collection_service import DataCollectionService
 from kehe_fl.utils.service.model_service import ModelService
+from kehe_fl.utils.service.monitoring_service import MonitoringService
 
 
 class MQTTDevice(MQTTProvider):
@@ -13,11 +14,15 @@ class MQTTDevice(MQTTProvider):
         super().__init__(broker, port, username, password)
         self.deviceId = deviceId
         self.clientTopic = f"{ProjectConstants.FEEDBACK_TOPIC}{deviceId}"
-        self.serverTopics = [ProjectConstants.CMD_TOPIC, ProjectConstants.DATA_TOPIC]
+        self.flRoundClientTopic = f"{ProjectConstants.FL_ROUND_TOPIC}{deviceId}"
+        self.serverTopics = [ProjectConstants.CMD_TOPIC, ProjectConstants.DATA_TOPIC, ProjectConstants.FL_ROUND_HANDLE]
         self._dataCollectionTask = None
         self._dataCollectionService = None
+        self._monitoringService = None
+        self._monitoringTask = None
         self._modelTask = None
         self._modelService = None
+        self._roundCounter = 0
 
     async def subscribe_topics(self):
         for topic in self.serverTopics:
@@ -26,12 +31,25 @@ class MQTTDevice(MQTTProvider):
     async def on_message(self, topic: str, payload: int):
         print(f"[MQTTDevice - {self.deviceId}] Received message: {payload} on topic {topic}")
 
-        if topic not in (ProjectConstants.CMD_TOPIC, ProjectConstants.DATA_TOPIC):
+        if topic not in (ProjectConstants.CMD_TOPIC, ProjectConstants.DATA_TOPIC, ProjectConstants.FL_ROUND_HANDLE):
             print(f"[MQTTDevice - {self.deviceId}] Unknown topic {topic}: {payload}")
             return
 
         if topic == ProjectConstants.DATA_TOPIC:
             await self.check_for_update(payload)
+            return
+
+        if topic == ProjectConstants.FL_ROUND_HANDLE:
+            if self._roundCounter == 0:
+                self._monitoringService = MonitoringService()
+                self._monitoringTask = asyncio.create_task(asyncio.to_thread(self._monitoringService.start))
+            self._roundCounter += 1
+            await self.handle_fl_round(payload)
+            if self._roundCounter == ProjectConstants.FL_GLOBAL_EPOCHS:
+                self._monitoringService.stop()
+                self._monitoringService = None
+                await self._monitoringTask
+                self._monitoringTask = None
             return
 
         await self.handle_cmd(payload)
@@ -170,3 +188,23 @@ class MQTTDevice(MQTTProvider):
             if withFeedback:
                 await self.send_data(MQTTStatusEnum.DATA_COLLECTION_NOT_RUNNING.value)
         return
+
+    async def handle_fl_round(self, _weights):
+        if self.__isTraining():
+            print(f"[MQTTDevice - {self.deviceId}] Training in process, cannot handle FL round")
+            return
+
+        if self.__isDataCollecting():
+            print(f"[MQTTDevice - {self.deviceId}] Data collection running, cannot handle FL round")
+            return
+
+        if not self._modelService:
+            self._modelService = ModelService()
+
+        if _weights:
+            self._modelService.set_weights(MQTTProvider._unpack_weights(_weights))
+
+        if self._roundCounter <= ProjectConstants.FL_GLOBAL_EPOCHS:
+            self._modelService.start_training(data_path=ProjectConstants.DATA_DIRECTORY)
+            weights = self._modelService.get_weights()
+            await self._send_weights(self.flRoundClientTopic, weights)

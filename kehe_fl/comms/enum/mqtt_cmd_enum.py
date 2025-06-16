@@ -9,15 +9,18 @@ class MQTTCmdEnum(Enum):
     SEND_UPDATE = 4
     REGISTER_DEVICE = 5
     STOP_DATA_COLLECTION = 6
+    FL_ROUND = 7
 
     @staticmethod
     def get_command_message(code):
         command_messages = {
-            MQTTCmdEnum.START_DATA_COLLECTION: "Advised edge devices to start data collection.",
-            MQTTCmdEnum.CHECK_DATA_COUNT: "Requested edge devices to share data count.",
-            MQTTCmdEnum.START_TRAINING: "Advised edge devices to start training.",
-            MQTTCmdEnum.CHECK_TRAINING_STATUS: "Requested edge devices to share training status.",
-            MQTTCmdEnum.SEND_UPDATE: "Requested edge devices to send update.",
-            MQTTCmdEnum.REGISTER_DEVICE: "Advised edge devices to register.",
+            MQTTCmdEnum.START_DATA_COLLECTION.value: "Advised edge devices to start data collection.",
+            MQTTCmdEnum.CHECK_DATA_COUNT.value: "Requested edge devices to share data count.",
+            MQTTCmdEnum.START_TRAINING.value: "Advised edge devices to start training.",
+            MQTTCmdEnum.CHECK_TRAINING_STATUS.value: "Requested edge devices to share training status.",
+            MQTTCmdEnum.SEND_UPDATE.value: "Requested edge devices to send update.",
+            MQTTCmdEnum.REGISTER_DEVICE.value: "Advised edge devices to register.",
+            MQTTCmdEnum.STOP_DATA_COLLECTION.value: "Advised edge devices to stop data collection.",
+            MQTTCmdEnum.FL_ROUND.value: "Advised edge devices to start federated learning round.",
         }
         return command_messages.get(code, "Unknown command code.")

@@ -15,22 +15,24 @@ class ModelService:
         self.__y = None
         self.__iterationCount = 0
 
-    def __loss(self, theta):
-        predictions = theta[0] + theta[1] * self.__x
-        return np.mean((predictions - self.__y) ** 2) / 2
+    def __sgd(self, theta):
+        x = self.__x
+        y = self.__y
+        n = len(x)
+        alpha = ProjectConstants.FL_ALPHA
+        epochs = ProjectConstants.FL_EPOCHS
 
-    def __gradient(self, theta):
-        epsilon = 1e-4
-        epsilon_0 = np.array([epsilon, 0])
-        epsilon_1 = np.array([0, epsilon])
-        d_theta_0 = (self.__loss(theta + epsilon_0) - self.__loss(theta - epsilon_0)) / (2 * epsilon)
-        d_theta_1 = (self.__loss(theta + epsilon_1) - self.__loss(theta - epsilon_1)) / (2 * epsilon)
-        return np.array([d_theta_0, d_theta_1])
-
-    def __gradient_descent(self, theta):
-        for _ in range(ProjectConstants.FL_ITERATIONS):
-            theta -= ProjectConstants.FL_ALPHA * self.__gradient(theta)
-            self.__iterationCount += 1
+        for _ in range(epochs):
+            indices = np.arange(n)
+            np.random.shuffle(indices)
+            for i in indices:
+                xi = x[i]
+                yi = y[i]
+                pred = theta[0] + theta[1] * xi
+                error = pred - yi
+                grad = np.array([error, error * xi])
+                theta -= alpha * grad
+                self.__iterationCount += 1
         return theta
 
     def predict(self, x):
@@ -45,14 +47,19 @@ class ModelService:
             self.__isTraining = True
 
             data_files = glob(f"{data_path}/*.csv")
+            if not data_files:
+                print("[ModelService] No data files found for training.")
+                self.__isTraining = False
+                return
             data = pd.concat([pd.read_csv(file) for file in data_files], ignore_index=True)
             self.__x = data["co2"].values
             self.__y = data["temperature"].values
 
-            self.__weights = np.zeros(2)
+            if self.__weights is None:
+                self.__weights = np.zeros(2)
 
             start_time = time.time()
-            self.__weights = self.__gradient_descent(self.__weights)
+            self.__weights = self.__sgd(self.__weights)
             end_time = time.time()
 
             print(f"[ModelService] Training completed in {end_time - start_time:.2f} seconds.")
@@ -76,13 +83,13 @@ class ModelService:
         self.__weights = weights
         return
 
-    def aggregate_weights(self, weights):
-        # aggregate weights from all devices
-        return
+    #FedAvg
+    @staticmethod
+    def aggregate_weights(weights):
+        return np.mean(weights, axis=0)
 
     @staticmethod
     def unpack_training_status(data):
-        # check data is array also convert to array because data is string then index 0 is iteration count and index 2 are weights (which can be also an array i think) - just check the model service
         test = data.split(",")
         if len(test) == 2:
             try:
