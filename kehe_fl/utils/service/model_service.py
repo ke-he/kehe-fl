@@ -55,7 +55,7 @@ class ModelService:
             self.__x = data["co2"].values
             self.__y = data["temperature"].values
 
-            if self.__weights is None:
+            if self.__weights is None or np.any(np.isnan(self.__weights)):
                 self.__weights = np.zeros(2)
 
             start_time = time.time()

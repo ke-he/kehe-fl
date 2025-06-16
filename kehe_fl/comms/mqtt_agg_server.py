@@ -180,6 +180,7 @@ class MQTTAggServer(MQTTProvider):
                 await asyncio.sleep(0.5)  # polling, not elegant but simple
 
             print(f"[MQTTAggServer] Aggregating weights for round {round_num + 1}")
+            self.__handle_model_aggregation()
 
             if round_num == ProjectConstants.FL_GLOBAL_EPOCHS - 1:
                 print("[MQTTAggServer] Finalizing FL round, sending aggregated weights to clients.")
