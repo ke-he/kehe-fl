@@ -1,24 +1,69 @@
 # kehe-fl
 
-A federated learning package for IoT devices and aggregation server communication using MQTT.
+A Proof of Concept (PoC) for Privacy-Preserving Federated Learning with IoT Devices, developed for the Bachelor’s thesis `Machbarkeitsanalyse von Federated Learning mit Internet of Things: Vergleich zentralisierter und dezentraler Trainingsansätze`.
+
+This repository implements a minimal, research-focused federated learning system, demonstrating distributed ML model training on resource-constrained IoT clients, coordinated via an MQTT broker, with a central aggregation server.
 
 ## Features
 
-- Distributed, federated learning orchestration using MQTT
-- Device-side and server-side reference implementations
-- Asyncio-based for efficient concurrency
-- Modular design for custom ML or IoT projects
+- Federated Learning Protocol: Orchestrates distributed training rounds between a central server and multiple IoT clients.
+
+- MQTT-based Communication: Efficient, lightweight message exchange suitable for IoT environments.
+
+- Device and Server Reference Implementations: Both roles can be run for local or distributed experiments.
+
+- Asyncio-based Concurrency: Enables scalable and non-blocking communication and control.
+
+- Pluggable ML Logic: Simple linear regression for demonstration; can be extended for further experiments.
+
+- Resource Monitoring: Optional metrics collection on devices and server (CPU, memory, network I/O) to support analysis of communication and computation overhead.
+
+## Purpose
+
+This codebase serves as a research PoC to empirically evaluate:
+
+- The feasibility of federated learning on real IoT hardware (e.g., Raspberry Pi).
+
+- The system-level overhead and requirements for PPML in practical settings.
+
+- Tradeoffs between centralized and decentralized model training (scalability, communication cost, resource usage).
+
+- The project is not a production-ready federated learning framework, but a minimal, transparent testbed for measuring and analyzing privacy-preserving ML on IoT devices.
 
 ## Quick Start
 
-### Installation
+### Packages
+- **FL Scenario (S1 | kehe_fl):** Individual models are trained on each edge device. The respective model updates are sent to the aggregation server (AS), aggregated there, and then redistributed to the edge devices.
+
+- **Centralized Scenario (S2 | kehe_fl_s2):** Model training takes place only on the central server, which receives the raw data from each edge device.
+
+- **Decentralized/Local Training without Aggregation (S3 | kehe_fl_s3):** Individual models are trained on each edge device, but model updates are not exchanged between edge devices or through the aggregation server.
+
+### Installation (MacOS/Linux)
+Start an MQTT broker (e.g., Mosquitto) on your local machine or server. The default broker address in the code is `localhost`, but you can change it to your broker's address. (You may need a config file for Mosquitto to allow anonymous access or set up user credentials.)
+
+```bash
+mosquitto -c /path/to/mosquitto.conf
+```
 
 ```bash
 pip install kehe-fl
 ```
 
-### Example Usage
-#### Device Side
+### Usage Overview
+
+#### 1. Device (Client)
+
+Each IoT device runs a client that:
+
+- Connects to the MQTT broker
+
+- Receives training instructions and model weights
+
+- Trains the model locally on its private data
+
+- Sends model updates back to the aggregation server
+
 ```python
 import asyncio
 from kehe_fl.comms.mqtt_device import MQTTDevice
@@ -37,7 +82,16 @@ async def main():
 asyncio.run(main())
 ```
 
-#### Aggregation Server Side
+#### 2. Aggregation Server
+
+The aggregation server:
+
+- Coordinates the global training process
+
+- Sends commands to clients
+
+- Receives, aggregates, and distributes model weights
+
 ```python
 import asyncio
 from kehe_fl.comms.mqtt_agg_server import MQTTAggServer
@@ -68,15 +122,19 @@ async def main():
 asyncio.run(main())
 ```
 
-### Adapt
-#### Communication
-You can adapt the device and server code to your specific ML or IoT project needs by modifying the `MQTTDevice` and `MQTTAggServer` or even `MQTTProvider` classes. These classes provide a foundation for communication and can be extended with custom logic for model training, data handling, and more.
+#### 3. Customization
 
-#### Machine Learning
-You can integrate your preferred machine learning libraries (like TensorFlow, PyTorch, etc.) into the device and server implementations with modifying `ModelService`. The provided classes can be used to send model updates, receive commands, and manage the training process across devices.
+- Communication: Adapt MQTT topics and payloads in project_constants.py as needed.
 
-#### Data Collection
-You can implement custom sensor classes in `common/<your sensor>.py`and also modify the `DataCollectionService` for your needs. This allows you to collect and process data from various IoT sensors and devices, which can then be used for training machine learning models.
+- Machine Learning Logic: Replace or extend the model in ModelService with your own (e.g., scikit-learn, PyTorch, etc.).
 
-#### Project Constants
-You can modify the `project_constants.py` file to change the MQTT topic structure, message formats, and other constants used throughout the package. This allows you to tailor the communication protocol to your specific requirements.
+- Sensor Data: Add your own sensor integration or data preprocessing in the common/ or service/ modules.
+
+- Metrics: Extend resource monitoring for more detailed benchmarking and analysis.
+
+### Documentation
+For experimental methodology, data collection, and analysis, see the Bachelor’s Thesis.
+
+### Disclaimer
+
+This project is intended for research and educational purposes only.Not suitable for production use.
