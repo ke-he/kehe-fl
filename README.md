@@ -32,7 +32,14 @@ This codebase serves as a research PoC to empirically evaluate:
 
 ## Quick Start
 
-### Installation
+### Packages
+- **FL Scenario (S1 | kehe_fl):** Individual models are trained on each edge device. The respective model updates are sent to the aggregation server (AS), aggregated there, and then redistributed to the edge devices.
+
+- **Centralized Scenario (S2 | kehe_fl_s2):** Model training takes place only on the central server, which receives the raw data from each edge device.
+
+- **Decentralized/Local Training without Aggregation (S3 | kehe_fl_s3):** Individual models are trained on each edge device, but model updates are not exchanged between edge devices or through the aggregation server.
+
+### Installation (MacOS/Linux)
 Start an MQTT broker (e.g., Mosquitto) on your local machine or server. The default broker address in the code is `localhost`, but you can change it to your broker's address. (You may need a config file for Mosquitto to allow anonymous access or set up user credentials.)
 
 ```bash
