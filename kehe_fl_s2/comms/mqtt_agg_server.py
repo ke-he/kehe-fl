@@ -133,8 +133,9 @@ class MQTTAggServer(MQTTProvider):
             self.__handle_clear_worker()
             if self._monitoringService is not None:
                 self._monitoringService.stop()
-                await self._monitoringService
+                await self._monitoringTask
                 self._monitoringService = None
+                self._monitoringTask = None
         elif self.lastCommand != MQTTCmdEnum.REGISTER_DEVICE.value and len(self.commandClientIds) == len(
                 self.clientIds):
             print(f"[MQTTAggServer] All devices have responded to command {self.lastCommand}")
