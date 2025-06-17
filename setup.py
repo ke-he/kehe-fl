@@ -15,7 +15,7 @@ setup(
     description="A federated learning package for IoT devices and aggregation server communication.",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    packages=find_packages(),
+    packages=find_packages(include=["kehe_fl", "kehe_fl.*"]),
     install_requires=[
         "aiomqtt"
     ],

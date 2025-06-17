@@ -6,11 +6,11 @@ import os
 import json
 from datetime import datetime
 
-from kehe_fl.utils.common.project_constants import ProjectConstants
+from kehe_fl_s2.utils.common.project_constants import ProjectConstants
 
 
 class MonitoringService:
-    def __init__(self, directory=ProjectConstants.MONITORING_DIRECTORY + "/s1", interval=ProjectConstants.MONITORING_INTERVAL):
+    def __init__(self, directory=ProjectConstants.MONITORING_DIRECTORY + "/s2", interval=ProjectConstants.MONITORING_INTERVAL):
         self.directory = directory
         self.interval = interval
         self._running = False
