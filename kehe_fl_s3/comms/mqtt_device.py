@@ -35,10 +35,6 @@ class MQTTDevice(MQTTProvider):
             print(f"[MQTTDevice - {self.deviceId}] Unknown topic {topic}: {payload}")
             return
 
-        if topic == ProjectConstants.CMD_TOPIC:
-            self._monitoringService = MonitoringService()
-            self._monitoringTask = asyncio.create_task(asyncio.to_thread(self._monitoringService.start))
-
         await self.handle_cmd(payload)
 
     async def send_data(self, data):
@@ -52,11 +48,12 @@ class MQTTDevice(MQTTProvider):
         elif payload == MQTTCmdEnum.STOP_DATA_COLLECTION.value:
             await self._stop_data_collection(withFeedback=True)
         elif payload == MQTTCmdEnum.START_TRAINING.value:
+            self._monitoringService = MonitoringService()
+            self._monitoringTask = asyncio.create_task(asyncio.to_thread(self._monitoringService.start))
             await self.start_training()
-            self._monitoringService.stop()
+            await self._monitoringService.stop()
             await self._monitoringTask
             self._monitoringService = None
-            self._monitoringTask = None
         elif payload == MQTTCmdEnum.REGISTER_DEVICE.value:
             await self.send_data(MQTTStatusEnum.REGISTRATION_SUCCESSFUL.value)
         else:
@@ -93,17 +90,11 @@ class MQTTDevice(MQTTProvider):
         return
 
     async def start_training(self):
-        if self.__isDataCollecting():
-            print(f"[MQTTDevice - {self.deviceId}] Data collection running, stopping it first")
-            await self._stop_data_collection()
-
         if not self.__isTraining():
             self._modelService = ModelService()
-            self._modelService.start_training(data_path=ProjectConstants.DATA_DIRECTORY)
-            await self.send_data(MQTTStatusEnum.STARTED_TRAINING.value)
-        else:
-            print(f"[MQTTDevice - {self.deviceId}] Training already running")
-            await self.send_data(MQTTStatusEnum.STARTED_TRAINING.value)
+            self._modelTask = asyncio.create_task(
+                asyncio.to_thread(self._modelService.start_training, ProjectConstants.DATA_DIRECTORY))
+            await self._modelTask
 
     def __isTraining(self):
         if self._modelTask and not self._modelTask.done():

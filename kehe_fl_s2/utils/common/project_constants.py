@@ -11,4 +11,4 @@ class ProjectConstants:
     FL_ALPHA = 1e-7
     FL_EPOCHS = 60  # in FL it was 20 global epochs and three per client, to make it equal we do this
     MONITORING_INTERVAL = 1  # seconds
-    CLIENT_DEVICES = 1
+    CLIENT_DEVICES = 2

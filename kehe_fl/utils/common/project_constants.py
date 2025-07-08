@@ -12,4 +12,4 @@ class ProjectConstants:
     FL_EPOCHS = 3
     FL_GLOBAL_EPOCHS = 20
     MONITORING_INTERVAL = 1  # seconds
-    CLIENT_DEVICES = 1
+    CLIENT_DEVICES = 2
