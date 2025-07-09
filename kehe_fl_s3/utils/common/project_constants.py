@@ -9,7 +9,6 @@ class ProjectConstants:
     FL_ROUND_HANDLE = "sys/fl_round_handle/"
     COLLECTION_INTERVAL = 2  # seconds
     FL_ALPHA = 1e-7
-    FL_EPOCHS = 3
-    FL_GLOBAL_EPOCHS = 20
+    FL_EPOCHS = 60 # in FL it was 20 global epochs and three per client, to make it equal we do this
     MONITORING_INTERVAL = 1  # seconds
     CLIENT_DEVICES = 2

@@ -1,12 +1,12 @@
 import asyncio
 import json
 
-from kehe_fl_s2.comms.enum.mqtt_cmd_enum import MQTTCmdEnum
-from kehe_fl_s2.comms.mqtt_provider import MQTTProvider
-from kehe_fl_s2.comms.enum.mqtt_status_enum import MQTTStatusEnum
-from kehe_fl_s2.utils.common.project_constants import ProjectConstants
-from kehe_fl_s2.utils.service.model_service import ModelService
-from kehe_fl_s2.utils.service.monitoring_service import MonitoringService
+from kehe_fl_s3.comms.enum.mqtt_cmd_enum import MQTTCmdEnum
+from kehe_fl_s3.comms.mqtt_provider import MQTTProvider
+from kehe_fl_s3.comms.enum.mqtt_status_enum import MQTTStatusEnum
+from kehe_fl_s3.utils.common.project_constants import ProjectConstants
+from kehe_fl_s3.utils.service.model_service import ModelService
+from kehe_fl_s3.utils.service.monitoring_service import MonitoringService
 
 
 class MQTTAggServer(MQTTProvider):
@@ -67,7 +67,7 @@ class MQTTAggServer(MQTTProvider):
 
         self.lastCommand = numCommand
         self.working = True
-        if self.lastCommand == MQTTCmdEnum.SEND_DATA.value:
+        if self.lastCommand == MQTTCmdEnum.START_TRAINING.value:
             self._monitoringService = MonitoringService()
             self._monitoringTask = asyncio.create_task(asyncio.to_thread(self._monitoringService.start))
 
@@ -94,25 +94,8 @@ class MQTTAggServer(MQTTProvider):
                 print(f"[MQTTAggServer] Device {deviceId}: Data count {data}")
             else:
                 MQTTAggServer.__printStatus(deviceId, data)
-        elif self.lastCommand == MQTTCmdEnum.STOP_DATA_COLLECTION.value:
+        elif self.lastCommand == MQTTCmdEnum.START_TRAINING.value:
             MQTTAggServer.__printStatus(deviceId, data)
-        elif self.lastCommand == MQTTCmdEnum.SEND_DATA.value:
-            try:
-                if isinstance(data, str):
-                    parsed_data = json.loads(data)
-                else:
-                    parsed_data = data
-
-                if isinstance(parsed_data, list) and len(parsed_data) > 0:
-                    self.dataArray.append(parsed_data)
-                    print(f"[MQTTAggServer] Device {deviceId} sent data")
-                else:
-                    self.deviceErrorOccurred = True
-                    MQTTAggServer.__printStatus(deviceId, data)
-            except Exception as e:
-                print(f"[MQTTAggServer] Error parsing data from {deviceId}: {e}")
-                self.deviceErrorOccurred = True
-                MQTTAggServer.__printStatus(deviceId, data)
 
     def __handle_register(self, deviceId):
         if deviceId not in self.clientIds:
@@ -126,20 +109,15 @@ class MQTTAggServer(MQTTProvider):
                 self.clientIds):
             print(f"[MQTTAggServer] All devices registered: {self.clientIds}")
             self.__handle_clear_worker()
-        elif self.lastCommand == MQTTCmdEnum.SEND_DATA.value and len(
-                self.dataArray) == ProjectConstants.CLIENT_DEVICES:
-            print(f"[MQTTAggServer] All devices have sent data")
-            self.modelService.start_training(self.dataArray)
+        elif self.lastCommand != MQTTCmdEnum.REGISTER_DEVICE.value and len(self.commandClientIds) == len(
+                self.clientIds):
+            print(f"[MQTTAggServer] All devices have responded to command {self.lastCommand}")
             self.__handle_clear_worker()
             if self._monitoringService is not None:
                 self._monitoringService.stop()
                 await self._monitoringTask
                 self._monitoringService = None
                 self._monitoringTask = None
-        elif self.lastCommand != MQTTCmdEnum.REGISTER_DEVICE.value and len(self.commandClientIds) == len(
-                self.clientIds):
-            print(f"[MQTTAggServer] All devices have responded to command {self.lastCommand}")
-            self.__handle_clear_worker()
 
     def __handle_clear_worker(self):
         self.deviceErrorOccurred = False
